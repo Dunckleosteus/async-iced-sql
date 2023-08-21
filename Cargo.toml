@@ -1,0 +1,12 @@
+[package]
+name = "add_cxv"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+csv = "1.2.2" # allow reading of csv files
+iced = "0.10"
+tokio = {version="1.0", features=["full"]}
+sqlx = {version="0.6", features=["postgres", "runtime-tokio-rustls"]}
