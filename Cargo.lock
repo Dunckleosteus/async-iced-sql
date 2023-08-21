@@ -24,6 +24,7 @@ version = "0.1.0"
 dependencies = [
  "csv",
  "iced",
+ "serde",
  "sqlx",
  "tokio",
 ]
@@ -1106,6 +1107,7 @@ dependencies = [
  "futures",
  "iced_core",
  "log",
+ "tokio",
  "wasm-bindgen-futures",
  "wasm-timer",
 ]
