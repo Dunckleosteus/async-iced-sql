@@ -63,10 +63,7 @@ impl Application for App {
                 Some(val) => {
                     let conn = val.clone();
                     println!("Filling database");
-                    Command::perform(
-                        CreateDBCommand::create_database(conn.conn),
-                        Messages::CreatedDB,
-                    )
+                    Command::perform(create_database(conn.conn), Messages::CreatedDB)
                 }
                 None => Command::none(),
             },
@@ -110,36 +107,31 @@ impl MyConnection {
         Ok(conn)
     }
 }
-pub struct CreateDBCommand {
-    success: bool,
-}
-impl CreateDBCommand {
-    async fn create_database(conn: sqlx::PgPool) -> Result<(), ()> {
-        // this function created creates all the tables in the database
-        let query = match fs::read_to_string("sql/build.sql") {
-            Ok(v) => v,
-            Err(_) => panic!("Did not find the build.sql file used to create database"),
-        };
-        let queries = query.split(";").filter(|x| *x != "");
-        for q in queries {
-            // splitting each query by ';' and executing them one by one
-            if let Err(_) = sqlx::query(&q).execute(&conn).await {
-                return Err(());
-            }
+async fn create_database(conn: sqlx::PgPool) -> Result<(), ()> {
+    // this function created creates all the tables in the database
+    let query = match fs::read_to_string("sql/build.sql") {
+        Ok(v) => v,
+        Err(_) => panic!("Did not find the build.sql file used to create database"),
+    };
+    let queries = query.split(";").filter(|x| *x != "");
+    for q in queries {
+        // splitting each query by ';' and executing them one by one
+        if let Err(_) = sqlx::query(&q).execute(&conn).await {
+            return Err(());
         }
-        // Filling database from fill.sql file
-        let query = match fs::read_to_string("sql/fill.sql") {
-            Ok(v) => v,
-            Err(_) => panic!("Could not find the fill.sql file"),
-        };
-        let queries = query.split(";").filter(|x| *x != "");
-        for q in queries {
-            if let Err(_) = sqlx::query(&q).execute(&conn).await {
-                return Err(());
-            };
-        }
-        Ok(())
     }
+    // Filling database from fill.sql file
+    let query = match fs::read_to_string("sql/fill.sql") {
+        Ok(v) => v,
+        Err(_) => panic!("Could not find the fill.sql file"),
+    };
+    let queries = query.split(";").filter(|x| *x != "");
+    for q in queries {
+        if let Err(_) = sqlx::query(&q).execute(&conn).await {
+            return Err(());
+        };
+    }
+    Ok(())
 }
 async fn get_structures(conn: &sqlx::PgPool) -> Result<Vec<Structure>, Box<dyn Error>> {
     let q = "SELECT * FROM structures";
