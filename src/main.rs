@@ -1,4 +1,4 @@
-use iced::widget::{button, column, text, Container};
+use iced::widget::{button, column, row, text};
 use iced::{executor, Command, Theme};
 use iced::{Application, Settings};
 // this program will take a csv file as input and add it to a a database as a table
@@ -13,8 +13,10 @@ struct Structure {
     id: i32,
     name: String,
 }
+#[derive(Debug, Clone)]
 pub enum Pages {
     DBManager,
+    Tables,
 }
 struct App {
     connected: bool,
@@ -28,6 +30,7 @@ pub enum Messages {
     Connected(Result<PgPool, String>),
     TryCreateDB,
     CreatedDB(Result<(), ()>),
+    ChangePage(Pages),
 }
 impl Application for App {
     type Executor = executor::Default;
@@ -79,12 +82,20 @@ impl Application for App {
                 };
                 Command::none()
             }
+            Messages::ChangePage(page) => {
+                self.current_page = page;
+                Command::none()
+            }
         }
     }
     fn view(&self) -> iced::Element<'_, Self::Message> {
-        let mut col = column![];
+        let mut col = column![row![
+            button("DB manager page").on_press(Messages::ChangePage(Pages::DBManager)),
+            button("Tables page").on_press(Messages::ChangePage(Pages::Tables)),
+        ]];
         match self.current_page {
             Pages::DBManager => col = col.push(db_manager_page(&self)),
+            Pages::Tables => col = col.push(tables_page(&self)),
         }
         col.into()
     }
@@ -98,13 +109,13 @@ fn db_manager_page(app: &App) -> iced::Element<'static, Messages> {
     ]
     .into()
 }
+fn tables_page(app: &App) -> iced::Element<'static, Messages> {
+    column![].into()
+}
+//===========================================Main====================================================
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let _ = App::run(Settings::default());
-    //create_database(&conn).await?;
-    //fill_database(&conn).await?;
-    //let a = get_structures(&conn).await?;
-    //println!("{:?}", a);
     Ok(())
 }
 // ===========================================Functions===============================================
