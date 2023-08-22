@@ -1,10 +1,8 @@
-use iced::widget::{button, column, row, text};
-use iced::{executor, Command, Theme};
+use iced::widget::{button, column, pick_list, row, text};
+use iced::{executor, Command, Renderer, Theme};
 use iced::{Application, Settings};
 // this program will take a csv file as input and add it to a a database as a table
-use serde::Deserialize;
 use sqlx::{FromRow, PgPool};
-use std::error::Error;
 use std::fs;
 const URL: &str = "postgres://postgres:266399@localhost:5432/postgres";
 
@@ -12,6 +10,10 @@ const URL: &str = "postgres://postgres:266399@localhost:5432/postgres";
 struct Structure {
     id: i32,
     name: String,
+}
+#[derive(Debug, Clone, FromRow)]
+pub struct Material {
+    pub name: String,
 }
 #[derive(Debug, Clone, FromRow)]
 pub struct Table {
@@ -31,6 +33,11 @@ struct App {
     db_created: bool,
     current_page: Pages,
     tables: Option<Vec<Table>>,
+    assise_material_list: Option<Vec<String>>,
+    roulement_material_list: Option<String>,
+    chosen_assise_material: Option<String>,
+    chosen_assise2_material: Option<String>,
+    chosen_roulement_material: Option<String>,
 }
 #[derive(Debug, Clone)]
 pub enum Messages {
@@ -43,6 +50,9 @@ pub enum Messages {
     ListTables(Result<Vec<Table>, ()>),
     TryAddValues,
     AddValues(Result<(), String>),
+    TryGetAssiseList,
+    UpdateAssiseList(Result<Vec<Material>, String>),
+    SelectMaterial(String),
 }
 impl Application for App {
     type Executor = executor::Default;
@@ -52,11 +62,16 @@ impl Application for App {
     fn new(_flags: ()) -> (Self, Command<Self::Message>) {
         (
             Self {
-                connected: false,
-                connection: None,
-                db_created: false,
-                current_page: Pages::DBManager,
-                tables: None,
+                connected: false,                // checks connection to database
+                connection: None,                // variable storing connection to postgres database
+                db_created: false,               // checks ot see id create_database was successful
+                current_page: Pages::DBManager,  // the page the user is currently looking at
+                tables: None,                    // tables contained in database
+                assise_material_list: None,      // list of assise material queried from database
+                roulement_material_list: None, // list of roulement materials queried from database
+                chosen_assise_material: None,  // assise material chosen in drop down list
+                chosen_assise2_material: None, // assise 2 material chosen in drop down list
+                chosen_roulement_material: None, // roulement material chosen from drop down list
             },
             Command::none(),
         )
@@ -126,6 +141,29 @@ impl Application for App {
                     Command::none()
                 }
             }
+            Messages::TryGetAssiseList => {
+                if let Some(val) = &self.connection {
+                    let conn = val.clone();
+                    Command::perform(get_assise_list(conn), Messages::UpdateAssiseList)
+                } else {
+                    Command::none()
+                }
+            }
+            Messages::UpdateAssiseList(x) => match x {
+                Ok(val) => {
+                    self.assise_material_list =
+                        Some(val.iter().map(|y| y.name.clone()).collect::<Vec<String>>());
+                    Command::none()
+                }
+                Err(err) => {
+                    println!("{}", err);
+                    Command::none()
+                }
+            },
+            Messages::SelectMaterial(val) => {
+                self.chosen_roulement_material = Some(val);
+                Command::none()
+            }
         }
     }
     fn view(&self) -> iced::Element<'_, Self::Message> {
@@ -145,10 +183,23 @@ impl Application for App {
 }
 //=========================================GRAPHICAL==================================
 // These functions are used to display the page the user is currently looking at
-fn emmission2_page(app: &App) -> iced::Element<'static, Messages> {
+fn emmission2_page<'a>(app: &'a App) -> iced::Element<'a, Messages> {
     let mut col = column![];
     if app.connection.is_some() {
-        col = col.push(text("connected"))
+        col = col.push(text("connected"));
+        col = col.push(button("Get Materials from database").on_press(Messages::TryGetAssiseList));
+        match &app.assise_material_list {
+            Some(materials) => {
+                let drop_down: iced::widget::PickList<'_, std::string::String, Messages, Renderer> =
+                    pick_list(
+                        materials,
+                        app.chosen_roulement_material.clone(),
+                        Messages::SelectMaterial,
+                    );
+                col = col.push(drop_down);
+            }
+            None => {}
+        };
     } else {
         col = col.push(text("Not connected to database"))
     }
@@ -193,6 +244,14 @@ async fn connect_db() -> Result<PgPool, String> {
         }
     };
     Ok(conn)
+}
+async fn get_assise_list(conn: sqlx::PgPool) -> Result<Vec<Material>, String> {
+    let q = "SELECT nom name FROM assise_material;";
+    let query = sqlx::query_as::<_, Material>(q);
+    match query.fetch_all(&conn).await {
+        Ok(val) => Ok(val),
+        Err(e) => Err(format!("{}", e)),
+    }
 }
 async fn get_tables(conn: sqlx::PgPool) -> Result<Vec<Table>, ()> {
     let q = "SELECT tablename name FROM pg_catalog.pg_tables tables WHERE tables.schemaname = 'public';";
