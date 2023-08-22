@@ -13,6 +13,11 @@ struct Structure {
     id: i32,
     name: String,
 }
+#[derive(Debug, Clone, FromRow)]
+pub struct Table {
+    // this struct is used to display tables on a iced page
+    pub name: String,
+}
 #[derive(Debug, Clone)]
 pub enum Pages {
     DBManager,
@@ -23,6 +28,7 @@ struct App {
     connection: Option<PgPool>,
     db_created: bool,
     current_page: Pages,
+    tables: Option<Vec<Table>>,
 }
 #[derive(Debug, Clone)]
 pub enum Messages {
@@ -31,6 +37,8 @@ pub enum Messages {
     TryCreateDB,
     CreatedDB(Result<(), ()>),
     ChangePage(Pages),
+    TryListTables,
+    ListTables(Result<Vec<Table>, ()>),
 }
 impl Application for App {
     type Executor = executor::Default;
@@ -44,6 +52,7 @@ impl Application for App {
                 connection: None,
                 db_created: false,
                 current_page: Pages::DBManager,
+                tables: None,
             },
             Command::none(),
         )
@@ -86,6 +95,23 @@ impl Application for App {
                 self.current_page = page;
                 Command::none()
             }
+            Messages::TryListTables => match &self.connection {
+                Some(val) => {
+                    let conn = val.clone();
+                    Command::perform(get_tables(conn), Messages::ListTables)
+                }
+                None => Command::none(),
+            },
+            Messages::ListTables(val) => {
+                match val {
+                    Ok(v) => self.tables = Some(v),
+                    Err(()) => {
+                        println!("get_tables returned and error");
+                        self.tables = None
+                    }
+                };
+                Command::none()
+            }
         }
     }
     fn view(&self) -> iced::Element<'_, Self::Message> {
@@ -110,7 +136,14 @@ fn db_manager_page(app: &App) -> iced::Element<'static, Messages> {
     .into()
 }
 fn tables_page(app: &App) -> iced::Element<'static, Messages> {
-    column![].into()
+    let mut col = column![button("List all tables").on_press(Messages::TryListTables)];
+    if let Some(tables) = &app.tables {
+        for table in tables.iter() {
+            println!("{:?}", table);
+            col = col.push(text(table.name.clone()));
+        }
+    }
+    col.into()
 }
 //===========================================Main====================================================
 #[tokio::main]
@@ -130,6 +163,17 @@ async fn connect_db() -> Result<PgPool, String> {
         }
     };
     Ok(conn)
+}
+async fn get_tables(conn: sqlx::PgPool) -> Result<Vec<Table>, ()> {
+    let q = "SELECT tablename name FROM pg_catalog.pg_tables tables WHERE tables.schemaname = 'public';";
+    let query = sqlx::query_as::<_, Table>(q);
+    match query.fetch_all(&conn).await {
+        Ok(val) => Ok(val),
+        Err(e) => {
+            println!("{:?}", e);
+            Err(())
+        }
+    }
 }
 async fn create_database(conn: sqlx::PgPool) -> Result<(), ()> {
     // this function created creates all the tables in the database
@@ -162,17 +206,4 @@ async fn get_structures(conn: &sqlx::PgPool) -> Result<Vec<Structure>, Box<dyn E
     let query = sqlx::query_as::<_, Structure>(q);
     let row = query.fetch_all(conn).await?;
     Ok(row)
-}
-async fn fill_database(conn: &sqlx::PgPool) -> Result<(), ()> {
-    let query = match fs::read_to_string("sql/fill.sql") {
-        Ok(v) => v,
-        Err(_) => panic!("Could not find the fill.sql file"),
-    };
-    let queries = query.split(";").filter(|x| *x != "");
-    for q in queries {
-        if let Err(_) = sqlx::query(&q).execute(conn).await {
-            return Err(());
-        };
-    }
-    Ok(())
 }
