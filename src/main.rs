@@ -13,10 +13,14 @@ struct Structure {
     id: i32,
     name: String,
 }
+pub enum Pages {
+    DBManager,
+}
 struct App {
     connected: bool,
     connection: Option<PgPool>,
     db_created: bool,
+    current_page: Pages,
 }
 #[derive(Debug, Clone)]
 pub enum Messages {
@@ -36,6 +40,7 @@ impl Application for App {
                 connected: false,
                 connection: None,
                 db_created: false,
+                current_page: Pages::DBManager,
             },
             Command::none(),
         )
@@ -66,19 +71,33 @@ impl Application for App {
                 }
                 None => Command::none(),
             },
-            Messages::CreatedDB(_) => Command::none(),
+            Messages::CreatedDB(e) => {
+                if let Ok(()) = e {
+                    self.db_created = true
+                } else {
+                    self.db_created = false
+                };
+                Command::none()
+            }
         }
     }
     fn view(&self) -> iced::Element<'_, Self::Message> {
-        column![
-            button("hello").on_press(Messages::TryConnect),
-            text(format!("Connected: {}", self.connected)),
-            button("Create database tables").on_press(Messages::TryCreateDB)
-        ]
-        .into()
+        let mut col = column![];
+        match self.current_page {
+            Pages::DBManager => col = col.push(db_manager_page(&self)),
+        }
+        col.into()
     }
 }
-
+fn db_manager_page(app: &App) -> iced::Element<'static, Messages> {
+    column![
+        button("hello").on_press(Messages::TryConnect),
+        text(format!("Connected: {}", app.connected)),
+        button("Create database tables").on_press(Messages::TryCreateDB),
+        text(format!("Filled database: {}", app.db_created)),
+    ]
+    .into()
+}
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let _ = App::run(Settings::default());
@@ -88,6 +107,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     //println!("{:?}", a);
     Ok(())
 }
+// ===========================================Functions===============================================
 async fn connect_db() -> Result<PgPool, String> {
     let conn = match sqlx::postgres::PgPool::connect(URL).await {
         Ok(value) => {
