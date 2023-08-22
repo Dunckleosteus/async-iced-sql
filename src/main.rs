@@ -23,6 +23,7 @@ pub enum Pages {
     DBManager,
     Tables,
     AddValues,
+    CalculEmission2,
 }
 struct App {
     connected: bool,
@@ -131,20 +132,31 @@ impl Application for App {
         let mut col = column![row![
             button("DB manager page").on_press(Messages::ChangePage(Pages::DBManager)),
             button("Tables page").on_press(Messages::ChangePage(Pages::Tables)),
+            button("Calcul emission 2").on_press(Messages::ChangePage(Pages::CalculEmission2)),
         ]];
         match self.current_page {
             Pages::DBManager => col = col.push(db_manager_page(&self)),
             Pages::Tables => col = col.push(tables_page(&self)),
             Pages::AddValues => col = col.push(add_values_page(&self)),
+            Pages::CalculEmission2 => col = col.push(emmission2_page(&self)),
         }
         col.into()
     }
 }
 //=========================================GRAPHICAL==================================
 // These functions are used to display the page the user is currently looking at
+fn emmission2_page(app: &App) -> iced::Element<'static, Messages> {
+    let mut col = column![];
+    if app.connection.is_some() {
+        col = col.push(text("connected"))
+    } else {
+        col = col.push(text("Not connected to database"))
+    }
+    col.into()
+}
 fn db_manager_page(app: &App) -> iced::Element<'static, Messages> {
     column![
-        button("hello").on_press(Messages::TryConnect),
+        button("Connect to database").on_press(Messages::TryConnect),
         text(format!("Connected: {}", app.connected)),
         button("Create database tables").on_press(Messages::TryCreateDB),
         text(format!("Filled database: {}", app.db_created)),
