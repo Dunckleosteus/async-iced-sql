@@ -15,13 +15,13 @@ struct Structure {
 }
 struct App {
     connected: bool,
-    connection: Option<MyConnection>,
+    connection: Option<PgPool>,
     db_created: bool,
 }
 #[derive(Debug, Clone)]
 pub enum Messages {
     TryConnect,
-    Connected(Result<MyConnection, String>),
+    Connected(Result<PgPool, String>),
     TryCreateDB,
     CreatedDB(Result<(), ()>),
 }
@@ -45,11 +45,10 @@ impl Application for App {
     }
     fn update(&mut self, message: Messages) -> iced::Command<Messages> {
         match message {
-            Messages::TryConnect => {
-                Command::perform(MyConnection::connect_db(), Messages::Connected)
-            }
+            Messages::TryConnect => Command::perform(connect_db(), Messages::Connected),
             Messages::Connected(conn) => {
-                println!("Managed to connect to database");
+                // This function waits for the message try connect to finish returning a message
+                // and adds it to state.
                 self.connected = true;
                 match conn {
                     Ok(val) => {
@@ -63,7 +62,7 @@ impl Application for App {
                 Some(val) => {
                     let conn = val.clone();
                     println!("Filling database");
-                    Command::perform(create_database(conn.conn), Messages::CreatedDB)
+                    Command::perform(create_database(conn), Messages::CreatedDB)
                 }
                 None => Command::none(),
             },
@@ -89,23 +88,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     //println!("{:?}", a);
     Ok(())
 }
-#[derive(Debug, Clone)]
-pub struct MyConnection {
-    conn: PgPool,
-}
-impl MyConnection {
-    async fn connect_db() -> Result<MyConnection, String> {
-        let conn = match sqlx::postgres::PgPool::connect(URL).await {
-            Ok(value) => {
-                println!("Connected to database");
-                MyConnection { conn: value }
-            }
-            Err(_) => {
-                panic!("Failed to connect to database");
-            }
-        };
-        Ok(conn)
-    }
+async fn connect_db() -> Result<PgPool, String> {
+    let conn = match sqlx::postgres::PgPool::connect(URL).await {
+        Ok(value) => {
+            println!("Connected to database");
+            value
+        }
+        Err(_) => {
+            panic!("Failed to connect to database");
+        }
+    };
+    Ok(conn)
 }
 async fn create_database(conn: sqlx::PgPool) -> Result<(), ()> {
     // this function created creates all the tables in the database
