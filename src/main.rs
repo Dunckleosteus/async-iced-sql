@@ -34,25 +34,30 @@ struct App {
     current_page: Pages,
     tables: Option<Vec<Table>>,
     assise_material_list: Option<Vec<String>>,
-    roulement_material_list: Option<String>,
+    roulement_material_list: Option<Vec<String>>,
     chosen_assise_material: Option<String>,
     chosen_assise2_material: Option<String>,
     chosen_roulement_material: Option<String>,
+    chosen_assise_thickness: Option<i8>,
+    chosen_roulement_thickness: Option<i8>,
 }
 #[derive(Debug, Clone)]
 pub enum Messages {
-    TryConnect,
-    Connected(Result<PgPool, String>),
-    TryCreateDB,
-    CreatedDB(Result<(), ()>),
-    ChangePage(Pages),
-    TryListTables,
-    ListTables(Result<Vec<Table>, ()>),
-    TryAddValues,
-    AddValues(Result<(), String>),
-    TryGetAssiseList,
-    UpdateAssiseList(Result<Vec<Material>, String>),
-    SelectMaterial(String),
+    TryConnect,                                         // try to connect to database
+    Connected(Result<PgPool, String>),                  // check to see if connection successful
+    TryCreateDB,               // try to create and fill db (only works when connected)
+    CreatedDB(Result<(), ()>), // checks if database connection successful
+    ChangePage(Pages),         // change page
+    TryListTables,             // try to get get a list of all tables
+    ListTables(Result<Vec<Table>, ()>), // result of TryListTables
+    TryAddValues,              // try to add values to table TODO: Implement
+    AddValues(Result<(), String>), // result of TryAddValues TODO: Implement
+    TryGetAssiseList,          // try to query database for assise list
+    UpdateAssiseList(Result<Vec<Material>, String>), // resut of TryGetAssiseList
+    TryGetRoulementList,       // try to get list of roulement materials
+    UpdateRoulementList(Result<Vec<Material>, String>), // updateRoulementList array based
+    SelectAssiseMaterial(String), // user selected assise material list from dropdownlist
+    SelectRoulementMaterial(String), // user selected Roulement material list from dropdownlist
 }
 impl Application for App {
     type Executor = executor::Default;
@@ -72,6 +77,8 @@ impl Application for App {
                 chosen_assise_material: None,  // assise material chosen in drop down list
                 chosen_assise2_material: None, // assise 2 material chosen in drop down list
                 chosen_roulement_material: None, // roulement material chosen from drop down list
+                chosen_assise_thickness: None,
+                chosen_roulement_thickness: None,
             },
             Command::none(),
         )
@@ -160,7 +167,33 @@ impl Application for App {
                     Command::none()
                 }
             },
-            Messages::SelectMaterial(val) => {
+            Messages::SelectAssiseMaterial(val) => {
+                self.chosen_assise_material = Some(val);
+                Command::none()
+            }
+            Messages::TryGetRoulementList => {
+                if let Some(val) = &self.connection {
+                    let conn = val.clone();
+                    Command::perform(get_roulement_list(conn), Messages::UpdateRoulementList)
+                } else {
+                    Command::none()
+                }
+            }
+            Messages::UpdateRoulementList(x) => match x {
+                Ok(val) => {
+                    let return_value = val
+                        .iter()
+                        .map(|y| -> String { y.name.clone() })
+                        .collect::<Vec<String>>();
+                    self.roulement_material_list = Some(return_value);
+                    Command::none()
+                }
+                Err(err) => {
+                    println!("{}", err);
+                    Command::none()
+                }
+            },
+            Messages::SelectRoulementMaterial(val) => {
                 self.chosen_roulement_material = Some(val);
                 Command::none()
             }
@@ -187,14 +220,31 @@ fn emmission2_page<'a>(app: &'a App) -> iced::Element<'a, Messages> {
     let mut col = column![];
     if app.connection.is_some() {
         col = col.push(text("connected"));
-        col = col.push(button("Get Materials from database").on_press(Messages::TryGetAssiseList));
+        col = col.push(
+            button("Get Assise Materials from database").on_press(Messages::TryGetAssiseList),
+        );
+        col = col.push(
+            button("Get Roulement Materials from database").on_press(Messages::TryGetRoulementList),
+        );
         match &app.assise_material_list {
             Some(materials) => {
                 let drop_down: iced::widget::PickList<'_, std::string::String, Messages, Renderer> =
                     pick_list(
                         materials,
+                        app.chosen_assise_material.clone(),
+                        Messages::SelectAssiseMaterial,
+                    );
+                col = col.push(drop_down);
+            }
+            None => {}
+        };
+        match &app.roulement_material_list {
+            Some(materials) => {
+                let drop_down: iced::widget::PickList<'_, std::string::String, Messages, Renderer> =
+                    pick_list(
+                        materials,
                         app.chosen_roulement_material.clone(),
-                        Messages::SelectMaterial,
+                        Messages::SelectRoulementMaterial,
                     );
                 col = col.push(drop_down);
             }
@@ -247,6 +297,14 @@ async fn connect_db() -> Result<PgPool, String> {
 }
 async fn get_assise_list(conn: sqlx::PgPool) -> Result<Vec<Material>, String> {
     let q = "SELECT nom name FROM assise_material;";
+    let query = sqlx::query_as::<_, Material>(q);
+    match query.fetch_all(&conn).await {
+        Ok(val) => Ok(val),
+        Err(e) => Err(format!("{}", e)),
+    }
+}
+async fn get_roulement_list(conn: sqlx::PgPool) -> Result<Vec<Material>, String> {
+    let q = "SELECT nom name FROM roulement_material;";
     let query = sqlx::query_as::<_, Material>(q);
     match query.fetch_all(&conn).await {
         Ok(val) => Ok(val),
