@@ -178,10 +178,8 @@ fn add_values_page(app: &App) -> iced::Element<'static, Messages> {
     col.into()
 }
 //===========================================Main====================================================
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
     let _ = App::run(Settings::default());
-    Ok(())
 }
 // ===========================================Functions===============================================
 async fn connect_db() -> Result<PgPool, String> {
@@ -232,10 +230,4 @@ async fn create_database(conn: sqlx::PgPool) -> Result<(), ()> {
         };
     }
     Ok(())
-}
-async fn get_structures(conn: &sqlx::PgPool) -> Result<Vec<Structure>, Box<dyn Error>> {
-    let q = "SELECT * FROM structures";
-    let query = sqlx::query_as::<_, Structure>(q);
-    let row = query.fetch_all(conn).await?;
-    Ok(row)
 }
