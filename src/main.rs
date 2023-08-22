@@ -22,6 +22,7 @@ pub struct Table {
 pub enum Pages {
     DBManager,
     Tables,
+    AddValues,
 }
 struct App {
     connected: bool,
@@ -39,6 +40,8 @@ pub enum Messages {
     ChangePage(Pages),
     TryListTables,
     ListTables(Result<Vec<Table>, ()>),
+    TryAddValues,
+    AddValues(Result<(), String>),
 }
 impl Application for App {
     type Executor = executor::Default;
@@ -112,6 +115,16 @@ impl Application for App {
                 };
                 Command::none()
             }
+            Messages::TryAddValues => Command::none(),
+            Messages::AddValues(res) => {
+                if let Err(e) = res {
+                    println!("Failed to add values: ");
+                    println!("{:?}", e);
+                    Command::none()
+                } else {
+                    Command::none()
+                }
+            }
         }
     }
     fn view(&self) -> iced::Element<'_, Self::Message> {
@@ -122,10 +135,13 @@ impl Application for App {
         match self.current_page {
             Pages::DBManager => col = col.push(db_manager_page(&self)),
             Pages::Tables => col = col.push(tables_page(&self)),
+            Pages::AddValues => col = col.push(add_values_page(&self)),
         }
         col.into()
     }
 }
+//=========================================GRAPHICAL==================================
+// These functions are used to display the page the user is currently looking at
 fn db_manager_page(app: &App) -> iced::Element<'static, Messages> {
     column![
         button("hello").on_press(Messages::TryConnect),
@@ -143,6 +159,10 @@ fn tables_page(app: &App) -> iced::Element<'static, Messages> {
             col = col.push(text(table.name.clone()));
         }
     }
+    col.into()
+}
+fn add_values_page(app: &App) -> iced::Element<'static, Messages> {
+    let mut col = column![];
     col.into()
 }
 //===========================================Main====================================================
