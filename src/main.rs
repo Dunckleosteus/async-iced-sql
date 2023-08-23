@@ -1,4 +1,4 @@
-use iced::widget::{button, column, pick_list, row, text};
+use iced::widget::{button, column, pick_list, row, text, text_input, TextInput};
 use iced::{executor, Command, Renderer, Theme};
 use iced::{Application, Settings};
 // this program will take a csv file as input and add it to a a database as a table
@@ -46,8 +46,9 @@ struct App {
     chosen_assise_material: Option<String>,
     chosen_assise2_material: Option<String>,
     chosen_roulement_material: Option<String>,
-    chosen_assise_thickness: Option<i8>,
-    chosen_roulement_thickness: Option<i8>,
+    assise_thickness: Option<String>,
+    assise_thickness_input: String,
+    chosen_roulement_thickness: Option<f32>,
     traffic_list: Option<Vec<Traffic>>,
     chosen_traffic: Option<String>,
 }
@@ -71,6 +72,8 @@ pub enum Messages {
     TryGetList,
     UpdateList(Result<Vec<Traffic>, String>),
     Select(String), // user selected assise material list from dropdownlist
+    AssiseThicknessInputChanged(String), // text input for assise thickness
+    ChangeAssiseThickness(String),
 }
 impl Application for App {
     type Executor = executor::Default;
@@ -90,7 +93,8 @@ impl Application for App {
                 chosen_assise_material: None,  // assise material chosen in drop down list
                 chosen_assise2_material: None, // assise 2 material chosen in drop down list
                 chosen_roulement_material: None, // roulement material chosen from drop down list
-                chosen_assise_thickness: None,
+                assise_thickness: None,
+                assise_thickness_input: String::from(""),
                 chosen_roulement_thickness: None,
                 traffic_list: None,
                 chosen_traffic: None,
@@ -231,6 +235,14 @@ impl Application for App {
                 self.chosen_traffic = Some(x);
                 Command::none()
             }
+            Messages::AssiseThicknessInputChanged(x) => {
+                self.assise_thickness_input = x;
+                Command::none()
+            }
+            Messages::ChangeAssiseThickness(x) => {
+                self.assise_thickness = Some(x);
+                Command::none()
+            }
         }
     }
     fn view(&self) -> iced::Element<'_, Self::Message> {
@@ -269,7 +281,16 @@ fn emmission2_page<'a>(app: &'a App) -> iced::Element<'a, Messages> {
                         app.chosen_assise_material.clone(),
                         Messages::SelectAssiseMaterial,
                     );
-                col = col.push(drop_down);
+                let thickness_input: TextInput<'_, Messages, Renderer> =
+                    text_input("Input Thickness", &app.assise_thickness_input)
+                        .on_input(Messages::AssiseThicknessInputChanged)
+                        .on_submit(Messages::ChangeAssiseThickness(
+                            app.assise_thickness_input.clone(),
+                        ));
+                col = col.push(row![drop_down, thickness_input,]);
+                if let Some(thick) = &app.assise_thickness {
+                    println!("{}", thick);
+                }
             }
             None => {}
         };
@@ -293,9 +314,7 @@ fn emmission2_page<'a>(app: &'a App) -> iced::Element<'a, Messages> {
                     pick_list(string_values, app.chosen_traffic.clone(), Messages::Select);
                 col = col.push(drop_down);
             }
-            None => {
-                println!("No values in traffic list")
-            }
+            None => {}
         };
     } else {
         col = col.push(text("Not connected to database"))
