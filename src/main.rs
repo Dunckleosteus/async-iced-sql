@@ -1,83 +1,29 @@
-use iced::widget::{button, column, pick_list, row, text, text_input, TextInput};
-use iced::{executor, Command, Renderer, Theme};
+mod app;
+mod messages;
+mod page_emission2;
+mod query;
+
+use app::App;
+use iced::widget::{button, column, pick_list, row, text, text_input, PickList, TextInput};
+use iced::{executor, Alignment, Command, Length, Renderer, Theme};
 use iced::{Application, Settings};
+use messages::Messages;
+use page_emission2::emmission2_page;
+use query::{Material, Table, Traffic};
 // this program will take a csv file as input and add it to a a database as a table
-use sqlx::{FromRow, PgPool};
+use sqlx::PgPool;
 use std::fs;
 // Constant values
 const URL: &str = "postgres://postgres:266399@localhost:5432/postgres";
 const DENSITE_ASSISE: f32 = 2.3;
 const DENSITE_ROULEMENT: f32 = 2.252;
 
-#[derive(Debug, FromRow)]
-struct Structure {
-    id: i32,
-    name: String,
-}
-#[derive(Debug, Clone, FromRow)]
-pub struct Material {
-    pub name: String,
-}
-#[derive(Debug, Clone, FromRow)]
-pub struct Table {
-    // this struct is used to display tables on a iced page
-    pub name: String,
-}
-#[derive(Debug, Clone, FromRow)]
-pub struct Traffic {
-    pub name: String,
-    pub traffic: String,
-}
 #[derive(Debug, Clone)]
 pub enum Pages {
     DBManager,
     Tables,
     AddValues,
     CalculEmission2,
-}
-struct App {
-    connected: bool,
-    connection: Option<PgPool>,
-    db_created: bool,
-    current_page: Pages,
-    tables: Option<Vec<Table>>,
-    assise_material_list: Option<Vec<String>>,
-    roulement_material_list: Option<Vec<String>>,
-    chosen_assise_material: Option<String>,
-    chosen_assise2_material: Option<String>,
-    chosen_roulement_material: Option<String>,
-    assise_thickness: Option<f32>,
-    assise_thickness_input: String,
-    roulement_thickness: Option<f32>,
-    roulement_thickness_input: String,
-    traffic_list: Option<Vec<Traffic>>,
-    chosen_traffic: Option<String>,
-}
-#[derive(Debug, Clone)]
-pub enum Messages {
-    TryConnect,                                         // try to connect to database
-    Connected(Result<PgPool, String>),                  // check to see if connection successful
-    TryCreateDB,               // try to create and fill db (only works when connected)
-    CreatedDB(Result<(), ()>), // checks if database connection successful
-    ChangePage(Pages),         // change page
-    TryListTables,             // try to get get a list of all tables
-    ListTables(Result<Vec<Table>, ()>), // result of TryListTables
-    TryAddValues,              // try to add values to table TODO: Implement
-    AddValues(Result<(), String>), // result of TryAddValues TODO: Implement
-    TryGetAssiseList,          // try to query database for assise list
-    UpdateAssiseList(Result<Vec<Material>, String>), // resut of TryGetAssiseList
-    TryGetRoulementList,       // try to get list of roulement materials
-    UpdateRoulementList(Result<Vec<Material>, String>), // updateRoulementList array based
-    SelectAssiseMaterial(String), // user selected assise material list from dropdownlist
-    SelectRoulementMaterial(String), // user selected Roulement material list from dropdownlist
-    TryGetList,
-    UpdateList(Result<Vec<Traffic>, String>),
-    Select(String), // user selected assise material list from dropdownlist
-    // drop down list
-    AssiseThicknessInputChanged(String), // text input for assise thickness
-    ChangeAssiseThickness(String),
-    RoulementThicknessInputChanged(String), // text input for assise thickness
-    ChangeRoulementThickness(String),
 }
 impl Application for App {
     type Executor = executor::Default;
@@ -279,84 +225,9 @@ impl Application for App {
         col.into()
     }
 }
+
 //=========================================GRAPHICAL==================================
 // These functions are used to display the page the user is currently looking at
-fn emmission2_page<'a>(app: &'a App) -> iced::Element<'a, Messages> {
-    let mut col = column![];
-    if app.connection.is_some() {
-        col = col.push(text("connected"));
-        col = col.push(
-            button("Get Assise Materials from database").on_press(Messages::TryGetAssiseList),
-        );
-        col = col.push(
-            button("Get Roulement Materials from database").on_press(Messages::TryGetRoulementList),
-        );
-        col = col.push(button("Get traffic list from assise").on_press(Messages::TryGetList));
-        match &app.assise_material_list {
-            Some(materials) => {
-                let drop_down: iced::widget::PickList<'_, std::string::String, Messages, Renderer> =
-                    pick_list(
-                        materials,
-                        app.chosen_assise_material.clone(),
-                        Messages::SelectAssiseMaterial,
-                    );
-                let thickness_input: TextInput<'_, Messages, Renderer> =
-                    text_input("Input Thickness", &app.assise_thickness_input)
-                        .on_input(Messages::AssiseThicknessInputChanged)
-                        .on_submit(Messages::ChangeAssiseThickness(
-                            app.assise_thickness_input.clone(),
-                        ));
-                col = col.push(row![
-                    drop_down,
-                    thickness_input,
-                    text(match app.assise_thickness {
-                        Some(val) => format!("{val}"),
-                        None => String::from("No value chosen"),
-                    })
-                ]);
-            }
-            None => {}
-        };
-        match &app.roulement_material_list {
-            Some(materials) => {
-                let thickness_input: TextInput<'_, Messages, Renderer> =
-                    text_input("Input Thickness", &app.roulement_thickness_input)
-                        .on_input(Messages::RoulementThicknessInputChanged)
-                        .on_submit(Messages::ChangeRoulementThickness(
-                            app.roulement_thickness_input.clone(),
-                        ));
-                let drop_down: iced::widget::PickList<'_, std::string::String, Messages, Renderer> =
-                    pick_list(
-                        materials,
-                        app.chosen_roulement_material.clone(),
-                        Messages::SelectRoulementMaterial,
-                    );
-                col = col.push(row![
-                    drop_down,
-                    thickness_input,
-                    text(match app.roulement_thickness {
-                        Some(val) => format!("{val}"),
-                        None => String::from("No value chosen"),
-                    })
-                ]);
-            }
-            None => {}
-        };
-        match &app.traffic_list {
-            Some(traffic) => {
-                let string_values: Vec<String> =
-                    traffic.clone().iter().map(|x| x.name.clone()).collect();
-                let drop_down: iced::widget::PickList<'_, std::string::String, Messages, Renderer> =
-                    pick_list(string_values, app.chosen_traffic.clone(), Messages::Select);
-                col = col.push(drop_down);
-            }
-            None => {}
-        };
-    } else {
-        col = col.push(text("Not connected to database"))
-    }
-    col.into()
-}
 fn db_manager_page(app: &App) -> iced::Element<'static, Messages> {
     column![
         button("Connect to database").on_press(Messages::TryConnect),
