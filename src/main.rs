@@ -4,7 +4,10 @@ use iced::{Application, Settings};
 // this program will take a csv file as input and add it to a a database as a table
 use sqlx::{FromRow, PgPool};
 use std::fs;
+// Constant values
 const URL: &str = "postgres://postgres:266399@localhost:5432/postgres";
+const DENSITE_ASSISE: f32 = 2.3;
+const DENSITE_ROULEMENT: f32 = 2.252;
 
 #[derive(Debug, FromRow)]
 struct Structure {
@@ -19,6 +22,11 @@ pub struct Material {
 pub struct Table {
     // this struct is used to display tables on a iced page
     pub name: String,
+}
+#[derive(Debug, Clone, FromRow)]
+pub struct Traffic {
+    pub name: String,
+    pub traffic: String,
 }
 #[derive(Debug, Clone)]
 pub enum Pages {
@@ -40,6 +48,8 @@ struct App {
     chosen_roulement_material: Option<String>,
     chosen_assise_thickness: Option<i8>,
     chosen_roulement_thickness: Option<i8>,
+    traffic_list: Option<Vec<Traffic>>,
+    chosen_traffic: Option<String>,
 }
 #[derive(Debug, Clone)]
 pub enum Messages {
@@ -58,6 +68,9 @@ pub enum Messages {
     UpdateRoulementList(Result<Vec<Material>, String>), // updateRoulementList array based
     SelectAssiseMaterial(String), // user selected assise material list from dropdownlist
     SelectRoulementMaterial(String), // user selected Roulement material list from dropdownlist
+    TryGetList,
+    UpdateList(Result<Vec<Traffic>, String>),
+    Select(String), // user selected assise material list from dropdownlist
 }
 impl Application for App {
     type Executor = executor::Default;
@@ -79,6 +92,8 @@ impl Application for App {
                 chosen_roulement_material: None, // roulement material chosen from drop down list
                 chosen_assise_thickness: None,
                 chosen_roulement_thickness: None,
+                traffic_list: None,
+                chosen_traffic: None,
             },
             Command::none(),
         )
@@ -197,6 +212,25 @@ impl Application for App {
                 self.chosen_roulement_material = Some(val);
                 Command::none()
             }
+            Messages::TryGetList => {
+                if let Some(val) = &self.connection {
+                    let conn = val.clone();
+                    Command::perform(get_traffic_list(conn), Messages::UpdateList)
+                } else {
+                    Command::none()
+                }
+            }
+            Messages::UpdateList(x) => {
+                match x {
+                    Ok(val) => self.traffic_list = Some(val),
+                    Err(e) => println!("failed to get traffic list from database: {}", e),
+                }
+                Command::none()
+            }
+            Messages::Select(x) => {
+                self.chosen_traffic = Some(x);
+                Command::none()
+            }
         }
     }
     fn view(&self) -> iced::Element<'_, Self::Message> {
@@ -226,6 +260,7 @@ fn emmission2_page<'a>(app: &'a App) -> iced::Element<'a, Messages> {
         col = col.push(
             button("Get Roulement Materials from database").on_press(Messages::TryGetRoulementList),
         );
+        col = col.push(button("Get traffic list from assise").on_press(Messages::TryGetList));
         match &app.assise_material_list {
             Some(materials) => {
                 let drop_down: iced::widget::PickList<'_, std::string::String, Messages, Renderer> =
@@ -249,6 +284,18 @@ fn emmission2_page<'a>(app: &'a App) -> iced::Element<'a, Messages> {
                 col = col.push(drop_down);
             }
             None => {}
+        };
+        match &app.traffic_list {
+            Some(traffic) => {
+                let string_values: Vec<String> =
+                    traffic.clone().iter().map(|x| x.name.clone()).collect();
+                let drop_down: iced::widget::PickList<'_, std::string::String, Messages, Renderer> =
+                    pick_list(string_values, app.chosen_traffic.clone(), Messages::Select);
+                col = col.push(drop_down);
+            }
+            None => {
+                println!("No values in traffic list")
+            }
         };
     } else {
         col = col.push(text("Not connected to database"))
@@ -306,6 +353,14 @@ async fn get_assise_list(conn: sqlx::PgPool) -> Result<Vec<Material>, String> {
 async fn get_roulement_list(conn: sqlx::PgPool) -> Result<Vec<Material>, String> {
     let q = "SELECT nom name FROM roulement_material;";
     let query = sqlx::query_as::<_, Material>(q);
+    match query.fetch_all(&conn).await {
+        Ok(val) => Ok(val),
+        Err(e) => Err(format!("{}", e)),
+    }
+}
+async fn get_traffic_list(conn: sqlx::PgPool) -> Result<Vec<Traffic>, String> {
+    let q = "SELECT nom name, traffic FROM traffic;";
+    let query = sqlx::query_as::<_, Traffic>(q);
     match query.fetch_all(&conn).await {
         Ok(val) => Ok(val),
         Err(e) => Err(format!("{}", e)),
