@@ -46,9 +46,10 @@ struct App {
     chosen_assise_material: Option<String>,
     chosen_assise2_material: Option<String>,
     chosen_roulement_material: Option<String>,
-    assise_thickness: Option<String>,
+    assise_thickness: Option<f32>,
     assise_thickness_input: String,
-    chosen_roulement_thickness: Option<f32>,
+    roulement_thickness: Option<f32>,
+    roulement_thickness_input: String,
     traffic_list: Option<Vec<Traffic>>,
     chosen_traffic: Option<String>,
 }
@@ -72,8 +73,11 @@ pub enum Messages {
     TryGetList,
     UpdateList(Result<Vec<Traffic>, String>),
     Select(String), // user selected assise material list from dropdownlist
+    // drop down list
     AssiseThicknessInputChanged(String), // text input for assise thickness
     ChangeAssiseThickness(String),
+    RoulementThicknessInputChanged(String), // text input for assise thickness
+    ChangeRoulementThickness(String),
 }
 impl Application for App {
     type Executor = executor::Default;
@@ -95,7 +99,8 @@ impl Application for App {
                 chosen_roulement_material: None, // roulement material chosen from drop down list
                 assise_thickness: None,
                 assise_thickness_input: String::from(""),
-                chosen_roulement_thickness: None,
+                roulement_thickness: None,
+                roulement_thickness_input: String::from(""),
                 traffic_list: None,
                 chosen_traffic: None,
             },
@@ -240,7 +245,21 @@ impl Application for App {
                 Command::none()
             }
             Messages::ChangeAssiseThickness(x) => {
-                self.assise_thickness = Some(x);
+                match x.parse::<f32>() {
+                    Ok(val) => self.assise_thickness = Some(val),
+                    Err(e) => println!("{}", e),
+                }
+                Command::none()
+            }
+            Messages::RoulementThicknessInputChanged(x) => {
+                self.roulement_thickness_input = x;
+                Command::none()
+            }
+            Messages::ChangeRoulementThickness(x) => {
+                match x.parse::<f32>() {
+                    Ok(val) => self.roulement_thickness = Some(val),
+                    Err(e) => println!("{}", e),
+                }
                 Command::none()
             }
         }
@@ -287,22 +306,39 @@ fn emmission2_page<'a>(app: &'a App) -> iced::Element<'a, Messages> {
                         .on_submit(Messages::ChangeAssiseThickness(
                             app.assise_thickness_input.clone(),
                         ));
-                col = col.push(row![drop_down, thickness_input,]);
-                if let Some(thick) = &app.assise_thickness {
-                    println!("{}", thick);
-                }
+                col = col.push(row![
+                    drop_down,
+                    thickness_input,
+                    text(match app.assise_thickness {
+                        Some(val) => format!("{val}"),
+                        None => String::from("No value chosen"),
+                    })
+                ]);
             }
             None => {}
         };
         match &app.roulement_material_list {
             Some(materials) => {
+                let thickness_input: TextInput<'_, Messages, Renderer> =
+                    text_input("Input Thickness", &app.roulement_thickness_input)
+                        .on_input(Messages::RoulementThicknessInputChanged)
+                        .on_submit(Messages::ChangeRoulementThickness(
+                            app.roulement_thickness_input.clone(),
+                        ));
                 let drop_down: iced::widget::PickList<'_, std::string::String, Messages, Renderer> =
                     pick_list(
                         materials,
                         app.chosen_roulement_material.clone(),
                         Messages::SelectRoulementMaterial,
                     );
-                col = col.push(drop_down);
+                col = col.push(row![
+                    drop_down,
+                    thickness_input,
+                    text(match app.roulement_thickness {
+                        Some(val) => format!("{val}"),
+                        None => String::from("No value chosen"),
+                    })
+                ]);
             }
             None => {}
         };
